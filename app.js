@@ -1,11 +1,20 @@
 const fetch = require('node-fetch');
 const cheerio = require('cheerio');
 const fs = require('fs');
+var admin = require("firebase-admin");s
 
 const URL = 'https://shop.travisscott.com/';
 const INTERVAL = 3 * 60 * 1000; // cada 3 minutos
 const TARGET_TITLE = 'AIR JORDAN 1 LOW OG SP "FRAGMENT"';
 const STATE_FILE = 'last_state.txt';
+const FCM_SERVR_KEY = process.env.FCM_SERVER_KEY
+
+var serviceAccount = require("./firebase-key.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
 
 async function checkShopifyDrop() {
   try {
@@ -38,15 +47,39 @@ async function checkShopifyDrop() {
     if (status !== previousState) {
       console.log('🔔 Cambio detectado:', previousState, '→', status);
       fs.writeFileSync(STATE_FILE, status);
-
-      // Aquí puedes mandar notificación: correo, Telegram, Discord, etc.
-      // Por ahora solo imprimimos en consola.
+        await sendNotification(
+        '👟 Cambio detectado en Travis Scott Shop',
+        `Estado: ${status}`
+        );
     }
 
   } catch (err) {
     console.error('Error al verificar la página:', err.message);
   }
 }
+
+async function sendNotification(title, body) {
+  await fetch('https://fcm.googleapis.com/fcm/send', {
+    method: 'POST',
+    headers: {
+      'Authorization': `key=${FCM_SERVER_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      to: '/topics/drops',
+      notification: {
+        title,
+        body,
+        sound: 'default',
+      },
+      data: {
+        trigger: 'drop_detected',
+        status: body,
+      },
+    }),
+  });
+}
+
 
 console.log(`👀 Monitoreando ${URL} cada ${INTERVAL / 1000 / 60} min...`);
 checkShopifyDrop();
